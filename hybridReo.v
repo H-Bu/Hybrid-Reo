@@ -32,7 +32,18 @@ Definition Deq(s1 s2:Stream TAD) : Prop :=
 
 Open Scope R_scope.
 
-(*===========channal definitiom=============*)
+(*===========basic channals=============*)
+Definition SyncDrain(Input1 Input2:Stream TAD) : Prop :=
+forall n:nat,PrL(Str_nth n Input1)=PrL(Str_nth n Input2).
+
+Definition FIFO1(Input Output:Stream TAD) : Prop :=
+(forall n:nat,PrL(Str_nth n Input)<PrL(Str_nth n Output)/\
+PrL(Str_nth (n+1) Input)>PrL(Str_nth n Output)/\
+PrM0(Str_nth n Input)=PrM0(Str_nth n Output)/\
+PrM1(Str_nth n Input)=PrM1(Str_nth n Output))/\
+(Deq Input Output).
+
+(*===========hybrid channals============*)
 Definition hyCon1(Input Output:Stream TAD):Prop:=
 (Deq Input Output)/\
 (forall n:nat,(PrM0(Str_nth n Input)<=PrM1(Str_nth n Input) ->(
@@ -58,6 +69,12 @@ PrM0(Str_nth n Input)=PrM0(Str_nth n Output) /\
 PrL(Str_nth n Input)+PrM1(Str_nth n Input)-PrM0(Str_nth n Input)
 =PrL(Str_nth n Output)
 ))).
+
+Definition hyCon3(Input Output:Stream TAD)(t:Time):Prop:=
+(Deq Input Output)/\
+(forall n:nat,PrL(Str_nth n Input)+t=PrL(Str_nth n Output)/\
+PrM0(Str_nth n Output)=0/\
+PrM1(Str_nth n Input)=PrM1(Str_nth n Output)).
 
 (*===========lemma list============*)
 Lemma R_eq:forall(a b:R),a+b-b=a.
@@ -117,11 +134,47 @@ apply H2.
 assumption.
 Qed.
 
-Lemma exist_output:forall(A:Stream TAD),(exists D,hyCon2 A D).
-admit.
-Admitted.
+Parameter con2 : TAD -> TAD.
+Axiom con2_relation: forall(a:TAD),((PrR(a)=PrR(con2 a))/\
+(PrM0(a)>=PrM1(a) ->(
+PrM0(a)=PrM0(con2 a) /\
+PrM1(a)=PrM1(con2 a) /\
+PrL(a)=PrL(con2 a)
+))/\(PrM0(a)<=PrM1(a)->(
+PrM0(a)=PrM1(con2 a) /\
+PrM0(a)=PrM0(con2 a) /\
+PrL(a)+PrM1(a)-PrM0(a)
+=PrL(con2 a)
+))).
 
-Theorem Example:forall(A B:Stream TAD),
+Lemma exist_output:forall(A:Stream TAD),(exists D,hyCon2 A D).
+Proof.
+intro.
+(*use map to construct a stream*)
+exists (map con2 A).
+unfold hyCon2.
+
+split.
+unfold Deq.
+intro.
+rewrite Str_nth_map.
+apply con2_relation.
+
+split;rewrite Str_nth_map.
+intro.
+split.
+pose(H0:=con2_relation(Str_nth n A)).
+destruct H0.
+destruct H1.
+apply H1.
+assumption.
+split;apply con2_relation;assumption.
+
+split;apply con2_relation;assumption.
+Qed.
+
+(*==========example 1==============*)
+Theorem Example1:forall(A B:Stream TAD),
 (exists C,(hyCon1 A C)/\(hyCon2 C B))->
 (exists D,(hyCon2 A D)/\(hyCon1 D B)).
 Proof.
@@ -398,4 +451,28 @@ apply Rgt_ge.
 assumption.
 rewrite H11.
 auto.
+Qed.
+
+
+(*==========example 2==============*)
+Theorem Example2:forall(A B C:Stream TAD)(t:Time),
+(hyCon3 A B t)/\(FIFO1 A C)/\(SyncDrain B C)->
+(Deq A C)/\(forall n:nat,PrL(Str_nth n A)+t=PrL(Str_nth n C)/\
+PrM0(Str_nth n A)=PrM0(Str_nth n C)/\
+PrM1(Str_nth n A)=PrM1(Str_nth n C)).
+Proof.
+intros.
+destruct H.
+destruct H0.
+
+split.
+apply H0.
+
+split.
+assert(PrL(Str_nth n B)=PrL(Str_nth n C)).
+apply H1.
+rewrite <- H2.
+apply H.
+
+split;apply H0.
 Qed.
